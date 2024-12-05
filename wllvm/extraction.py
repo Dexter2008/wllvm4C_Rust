@@ -182,6 +182,10 @@ def extract_section_darwin(inputFile):
         _logger.debug('decoded:\n%s\n', retval)
         if not retval:
             _logger.error('%s contained no %s segment', inputFile, darwinSegmentName)
+        else:
+            # Remove duplicate paths
+            retval = list(set(retval))
+            _logger.debug('Unique bitcode paths: %s', retval)
     except Exception as e:
         _logger.error('extract_section_darwin: %s', str(e))
     return retval
@@ -196,6 +200,9 @@ def extract_section_linux(inputFile):
     contents = content.split('\n')
     if not contents:
         _logger.error('%s contained no %s. section is empty', inputFile, elfSectionName)
+    else: 
+        contents = list(set(contents))
+        _logger.debug('Unique bitcode paths: %s', contents)
     return contents
 
 

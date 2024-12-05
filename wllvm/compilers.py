@@ -286,6 +286,7 @@ def getBuilder(cmd, mode):
         return ClangBuilder(cmd, mode, pathPrefix)
     if cstring == 'dragonegg':
         return DragoneggBuilder(cmd, mode, pathPrefix)
+    #if cstring == 'rustc'
     if cstring is None:
         errorMsg = ' No compiler set. Please set environment variable %s'
         _logger.critical(errorMsg, compilerEnv)
@@ -417,3 +418,16 @@ def buildObjectFile(builder, srcFile, objFile):
 # in this case af.inputFiles is empty and we are done
 #
 #
+def compile_rust_to_bc(rust_file, output_file):
+    try:
+        subprocess.check_call(['rustc', '--emit=llvm-ir', '--crate-type=lib', '-o', output_file, rust_file])
+    except subprocess.CalledProcessError as e:
+        print(f'Failed to compile Rust file: {e}')
+        sys.exit(1)
+
+def link_bitcode_files(bitcode_files, output_file):
+    try:
+        subprocess.check_call(['llvm-link'] + bitcode_files + ['-o', output_file])
+    except subprocess.CalledProcessError as e:
+        _logger.error('Failed to link bitcode files: %s', e)
+        sys.exit(1)

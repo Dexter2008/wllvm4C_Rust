@@ -264,7 +264,8 @@ class ArgumentListFilter:
             r'^-I.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-D.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-U.+$' : (0, ArgumentListFilter.compileUnaryCallback),
-            r'^-Wl,.+$' : (0, ArgumentListFilter.linkUnaryCallback),
+            # r'^-Wl,.+$' : (0, ArgumentListFilter.linkUnaryCallback),
+            r'^-Wl,(?!-gc-sections).+$' : (0, ArgumentListFilter.linkUnaryCallback),
             r'^-W(?!l,).*$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-fsanitize=.+$' : (0, ArgumentListFilter.compileLinkUnaryCallback),
             r'^-f.+$' : (0, ArgumentListFilter.compileUnaryCallback),
@@ -280,6 +281,8 @@ class ArgumentListFilter:
             r'^-march=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                               #iam: linux kernel stuff
             r'^--param=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                              #iam: linux kernel stuff
 
+
+            r'^.+\.rs$' : (0, ArgumentListFilter.rustFileCallback),
 
             #iam: mac stuff...
             r'-mmacosx-version-min=.+$' :  (0, ArgumentListFilter.compileUnaryCallback),
@@ -299,6 +302,8 @@ class ArgumentListFilter:
         self.objectFiles = []
         self.outputFilename = None
 
+        self.rustFiles = []
+        
         #iam: try and split the args into linker and compiler switches
         self.compileArgs = []
         self.linkArgs = []
@@ -488,6 +493,10 @@ class ArgumentListFilter:
     def linkingGroupCallback(self, args):
         _logger.debug('linkingGroupCallback: %s', args)
         self.linkArgs.extend(args)
+
+    def rustFileCallback(self, rustfile):
+        _logger.debug('Rust file: %s', rustfile)
+        self.rustFiles.append(rustfile)
 
     def getOutputFilename(self):
         if self.outputFilename is not None:
