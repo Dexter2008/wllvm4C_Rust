@@ -3,6 +3,7 @@ from __future__ import print_function
 
 
 import os
+import re
 import sys
 import tempfile
 import hashlib
@@ -82,6 +83,8 @@ asDir = os.path.abspath(os.path.join(driverDir, 'dragonegg_as'))
 
 # Environmental variable for path to compiler tools (clang/llvm-link etc..)
 llvmCompilerPathEnv = 'LLVM_COMPILER_PATH'
+
+RustcPathEnv ='RUSTC_PATH'
 
 # Environmental variable for cross-compilation target.
 binutilsTargetPrefixEnv = 'BINUTILS_TARGET_PREFIX'
@@ -210,7 +213,9 @@ class BuilderBase:
                 for baddy in forbidden:
                     self.cmd.remove(baddy)
         return self.cmd
-
+    
+    def getLLVM_ar(self):
+        return [f'{self.prefixPath}{os.getenv("LLVM_AR_NAME") or "llvm-ar"}']
 
 class ClangBuilder(BuilderBase):
 
@@ -273,26 +278,56 @@ class DragoneggBuilder(BuilderBase):
             self.af = ArgumentListFilter(self.cmd)
         return self.af
 
+class RustcBuilder(BuilderBase):
+    def getBitcodeGenerationFlags(self):
+        # iam: If the environment variable LLVM_BITCODE_GENERATION_FLAGS is set we will add them to the
+        # bitcode generation step
+        bitcodeFLAGS  = os.getenv('LLVM_BITCODE_GENERATION_FLAGS')
+        if bitcodeFLAGS:
+            return bitcodeFLAGS.split()
+        return []
+    def getBitcodeCompiler(self):
+        rustc = self.getCompiler()
+        return rustc + ['--emit=llvm-bc'] + self.getBitcodeGenerationFlags()
+    def getCompiler(self):
+        if self.mode == "wllvmrs":
+            env,prog= 'LLVM_RUSTC_NAME', 'rustc'
+        else:
+            raise Exception(f'Unknown mode {self.mode}')
+        return [f'{self.prefixPath}{os.getenv(env) or prog}']
+    def getBitcodeArglistFilter(self):
+        if self.af is None:
+            self.af =ArgumentListFilter(self.cmd)
+        return self.af
+
 def getBuilder(cmd, mode):
     compilerEnv = 'LLVM_COMPILER'
-    cstring = os.getenv(compilerEnv)
+    MixedCompilerEnv = "LLVM_MIXED_COMPILER"
+    compiler = os.getenv(compilerEnv) # compiler clang/dragonegg
+    if MixedCompilerEnv:
+        othercompiler = os.getenv(MixedCompilerEnv) # Optional Rustc
     pathPrefix = os.getenv(llvmCompilerPathEnv) # Optional
-
-    _logger.debug('WLLVM compiler using %s', cstring)
+    RustcPathPrefix = os.getenv(RustcPathEnv)
+    # _logger.debug('WLLVM compiler using %s', cstring)
     if pathPrefix:
         _logger.debug('WLLVM compiler path prefix "%s"', pathPrefix)
 
-    if cstring == 'clang':
+    if  mode == 'wllvmrs' and othercompiler == 'rustc':
+        _logger.debug('WLLVM compiler using %s', othercompiler)
+        return RustcBuilder(cmd,mode,RustcPathPrefix)
+    if compiler == 'clang':
+        _logger.debug('WLLVM compiler using %s', compiler)
         return ClangBuilder(cmd, mode, pathPrefix)
-    if cstring == 'dragonegg':
+    if compiler == 'dragonegg':
+        _logger.debug('WLLVM compiler using %s', compiler)
         return DragoneggBuilder(cmd, mode, pathPrefix)
-    #if cstring == 'rustc'
-    if cstring is None:
+    
+    if (compiler and othercompiler) is None:
         errorMsg = ' No compiler set. Please set environment variable %s'
         _logger.critical(errorMsg, compilerEnv)
         raise Exception(errorMsg)
     errorMsg = '%s = %s : Invalid compiler type'
-    _logger.critical(errorMsg, compilerEnv, str(cstring))
+    _logger.critical(errorMsg, compilerEnv, str(compiler))
     raise Exception(errorMsg)
 
 def buildObject(builder):
@@ -334,6 +369,7 @@ def buildAndAttachBitcode(builder, af):
             _logger.debug('Not compile only case: %s', srcFile)
             (objFile, bcFile) = af.getArtifactNames(srcFile, hidden)
             if hidden:
+                _logger.debug('building %s by %s',objFile, srcFile)
                 buildObjectFile(builder, srcFile, objFile)
                 newObjectFiles.append(objFile)
 
@@ -347,6 +383,7 @@ def buildAndAttachBitcode(builder, af):
 
 
     if not af.isCompileOnly:
+        _logger.debug("link all files: %s",newObjectFiles)
         linkFiles(builder, newObjectFiles)
 
     sys.exit(0)
@@ -354,11 +391,18 @@ def buildAndAttachBitcode(builder, af):
 def linkFiles(builder, objectFiles):
     af = builder.getBitcodeArglistFilter()
     outputFile = af.getOutputFilename()
-    cc = builder.getCompiler()
-    cc.extend(objectFiles)
-    cc.extend(af.objectFiles)
-    cc.extend(af.linkArgs)
-    cc.extend(['-o', outputFile])
+    if af.cratetype == 'staticlib':
+        cc = builder.getLLVM_ar()
+        cc.extend(['-rcs', outputFile])
+        cc.extend(objectFiles)
+        cc.extend(af.objectFiles)
+        _logger.debug("link:%s",cc)
+    else:
+        cc = builder.getCompiler()
+        cc.extend(objectFiles)
+        cc.extend(af.objectFiles)
+        cc.extend(af.linkArgs)
+        cc.extend(['-o', outputFile])
     proc = Popen(cc)
     rc = proc.wait()
     if rc != 0:
@@ -370,7 +414,16 @@ def buildBitcodeFile(builder, srcFile, bcFile):
     af = builder.getBitcodeArglistFilter()
     bcc = builder.getBitcodeCompiler()
     bcc.extend(af.compileArgs)
-    bcc.extend(['-c', srcFile])
+    if srcFile.endswith('.rs'):
+        # for i, arg in enumerate(bcc):
+        #     if arg.startswith('--emit='):
+        #         bcc[i] = '--emit=llvm-bc'
+        #         break
+        #     if '--emit=llvm-bc' not in bcc:
+        #         bcc.extend('--emit=llvm-bc')
+        bcc.extend(['--emit=llvm-bc', srcFile])
+    else:
+        bcc.extend(['-c', srcFile])
     bcc.extend(['-o', bcFile])
     _logger.debug('buildBitcodeFile: %s', bcc)
     proc = Popen(bcc)
@@ -384,7 +437,16 @@ def buildObjectFile(builder, srcFile, objFile):
     cc = builder.getCompiler()
     cc.extend(af.compileArgs)
     cc.append(srcFile)
-    cc.extend(['-c', '-o', objFile])
+    if srcFile.endswith('.rs'):
+            # for i, arg in enumerate(cc):
+            # if arg.startswith('--emit='):
+            #     cc[i] = '--emit=obj'
+            #     break
+            # if '--emit=obj' not in cc:
+            #     cc.extend('--emit=obj')
+        cc.extend(['--emit=obj', '-o', objFile])
+    else:
+        cc.extend(['-c', '-o', objFile])
     _logger.debug('buildObjectFile: %s', cc)
     proc = Popen(cc)
     rc = proc.wait()
@@ -418,16 +480,3 @@ def buildObjectFile(builder, srcFile, objFile):
 # in this case af.inputFiles is empty and we are done
 #
 #
-def compile_rust_to_bc(rust_file, output_file):
-    try:
-        subprocess.check_call(['rustc', '--emit=llvm-ir', '--crate-type=lib', '-o', output_file, rust_file])
-    except subprocess.CalledProcessError as e:
-        print(f'Failed to compile Rust file: {e}')
-        sys.exit(1)
-
-def link_bitcode_files(bitcode_files, output_file):
-    try:
-        subprocess.check_call(['llvm-link'] + bitcode_files + ['-o', output_file])
-    except subprocess.CalledProcessError as e:
-        _logger.error('Failed to link bitcode files: %s', e)
-        sys.exit(1)

@@ -10,11 +10,18 @@ fi
 # 执行 rustc 编译
 rustc "$@"
 
-# 获取编译的目标类型
-TARGET_TYPE=$(rustc --print target-libdir)
+# # 获取编译的目标类型
+# TARGET_TYPE=$(rustc --print target-libdir)
+# 优先检查命令行中的 --crate-type 参数
+if echo "$@" | grep -q -- "--crate-type=staticlib"; then
+    CRATE_TYPE="staticlib"
+else
+    # 如果命令行没有提供 crate-type 参数，使用 cargo metadata 来检查
+    CRATE_TYPE=$(cargo metadata --format-version 1 | jq -r '.packages[0].targets[] | select(.kind[] == "staticlib") | .kind[0]')
+fi
 
 # 判断是否是静态库目标类型
-if [[ "$@" == *"--crate-type=staticlib"* ]]; then
+if [[ "$CRATE_TYPE" == *"staticlib"* ]]; then
     echo "Rust is compiling a static library, proceeding with bitcode embedding." >&2
 
     # 查找所有生成的 .bc 文件
@@ -42,11 +49,17 @@ if [[ "$@" == *"--crate-type=staticlib"* ]]; then
             # 提取 .a 文件中的所有 .o 文件
             llvm-ar x "$ar_file"
 
-            # 查找同名的 .o 文件，并添加 .llvm_bc 段
+            #添加 .llvm_bc 段
             for obj_file in *.o; do
-                echo $bc_path > $TMP_FILE
-                llvm-objcopy --add-section .llvm_bc="$TMP_FILE" "$obj_file"
-                echo "Bitcode path $bc_path added to $obj_file" >&2
+                # 提取bc文件的名称，不包括扩展名
+                bc_name=$(basename "$bc_path" .bc)
+                # 检查obj_file是否包含bc_name
+                if [[ "$obj_file" == "$bc_name"* ]]; then
+                    echo "$bc_path" > "$TMP_FILE"
+                    llvm-objcopy --add-section .llvm_bc="$TMP_FILE" "$obj_file"
+                    echo "Bitcode path $bc_path added to $obj_file" >&2
+                    break  # 找到匹配的文件后退出循环
+                fi
             done
 
             # 重新打包 .a 文件
@@ -57,8 +70,7 @@ if [[ "$@" == *"--crate-type=staticlib"* ]]; then
         fi
     done
 else
-    # 非静态库情况：将所有 .bc 文件链接在一起
-    echo "Rust is not compiling a static library, linking all .bc files into a single bitcode file." >&2
+    echo "Rust is not compiling a static library" >&2
 
     # 查找所有的 .bc 文件
     BC_FILES=($(find target/debug/deps -name "*.bc"))
@@ -78,7 +90,7 @@ else
     # 输出最终链接的 .bc 文件
     FINAL_BC="target/merged.bc"
     FINAL_LL="target/merged.ll"
-    # 使用 llvm-link 将所有 .bc 文件链接成一个
+    
     llvm-link $(cat "$TMP_FILE") -o "$FINAL_BC"
     llvm-dis "$FINAL_BC" > "$FINAL_LL"
     # 检查链接是否成功

@@ -17,7 +17,7 @@ def main():
     """ The entry point to wllvm++.
     """
     return wcompile("wllvm++")
-*
+
 
 if __name__ == '__main__':
     sys.exit(main())

@@ -8,7 +8,7 @@ import sys
 _logger = logging.getLogger(__name__)
 
 # Flag for dumping
-DUMPING = False
+DUMPING = True
 
 # This class applies filters to GCC argument lists.  It has a few
 # default arguments that it records, but does not modify the argument
@@ -219,7 +219,13 @@ class ArgumentListFilter:
             '/dev/null' : (0, ArgumentListFilter.inputFileCallback),
             '-mno-80387': (0, ArgumentListFilter.compileUnaryCallback), #gcc Don't generate output containing 80387 instructions for floating point.
 
-
+            # rust stuff
+            '--emit' : (1, ArgumentListFilter.rustEmitBinaryCallback),
+            '--crate-name' : (1, ArgumentListFilter.rustCratenameBinaryCallback),
+            '--crate-type' : (1, ArgumentListFilter.rustCratetypeBinaryCallback),
+            '-C' : (1, ArgumentListFilter.rustCcompileLinkBinaryCallback),
+            '--out-dir' : (1, ArgumentListFilter.rustOutdirBinaryCallback),
+            '--check-cfg' : (1, ArgumentListFilter.compileBinaryCallback),
             #
             # BD: need to warn the darwin user that these flags will rain on their parade
             # (the Darwin ld is a bit single minded)
@@ -264,7 +270,7 @@ class ArgumentListFilter:
             r'^-I.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-D.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-U.+$' : (0, ArgumentListFilter.compileUnaryCallback),
-            # r'^-Wl,.+$' : (0, ArgumentListFilter.linkUnaryCallback),
+            r'^-Wl,.+$' : (0, ArgumentListFilter.linkUnaryCallback),
             r'^-Wl,(?!-gc-sections).+$' : (0, ArgumentListFilter.linkUnaryCallback),
             r'^-W(?!l,).*$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-fsanitize=.+$' : (0, ArgumentListFilter.compileLinkUnaryCallback),
@@ -281,8 +287,17 @@ class ArgumentListFilter:
             r'^-march=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                               #iam: linux kernel stuff
             r'^--param=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                              #iam: linux kernel stuff
 
+            #iam: rust stuff...
+            r'^.+\.rs$' : (0, ArgumentListFilter.inputFileCallback),
+            r'^--edition=.+$' : (0, ArgumentListFilter.compileUnaryCallback),
+            r'^--error-format=.+$' : (0, ArgumentListFilter.compileUnaryCallback),
+            r'^--json=.+$' : (0, ArgumentListFilter.compileUnaryCallback),
+            r'^--diagnostic-width=.+$' : (0, ArgumentListFilter.compileUnaryCallback),
+            r'^--emit=.+$' : (0, ArgumentListFilter.rustEmitUnaryCallback),
+            r'^--crate-type=.+$' : (0, ArgumentListFilter.rustCratetypeUnaryCallback),
 
-            r'^.+\.rs$' : (0, ArgumentListFilter.rustFileCallback),
+            r'-Clinker=.+$' : (0,ArgumentListFilter.linkUnaryCallback),
+            r'-Clink-arg=.+$' : (0,ArgumentListFilter.linkUnaryCallback),
 
             #iam: mac stuff...
             r'-mmacosx-version-min=.+$' :  (0, ArgumentListFilter.compileUnaryCallback),
@@ -296,13 +311,18 @@ class ArgumentListFilter:
 
         }
 
+        # rust stuff...
+        self.cratetype = ''
+        self.emittype = ''
+        self.cratename = ''
+        self.outdir = ''
+        self.extrafilename = ''
         #iam: try and keep track of the files, input object, and output
         self.inputList = inputList
         self.inputFiles = []
         self.objectFiles = []
         self.outputFilename = None
 
-        self.rustFiles = []
         
         #iam: try and split the args into linker and compiler switches
         self.compileArgs = []
@@ -490,13 +510,39 @@ class ArgumentListFilter:
         self.linkArgs.append(flag)
         self.linkArgs.append(arg)
 
+    def rustEmitUnaryCallback(self, flag):
+        self.linkUnaryCallback(flag)
+        self.emittype = flag.split('=')
+    def rustEmitBinaryCallback(self, flag,arg):
+        self.linkBinaryCallback(flag,arg)
+        self.emittype = arg
+    
+    def rustCratetypeUnaryCallback(self, flag):
+        self.compileLinkUnaryCallback(flag)
+        self.cratetype = flag.split('=')
+    def rustCratetypeBinaryCallback(self, flag, arg):
+        self.compileLinkBinaryCallback(flag,arg)
+        self.cratetype = arg
+
+    def rustCratenameBinaryCallback(self, flag, arg):
+        self.compileBinaryCallback(flag,arg)
+        self.cratename = arg
+
+    def rustOutdirBinaryCallback(self, flag, arg):
+        self.compileLinkBinaryCallback(flag, arg)
+        self.outdir = arg
+        if self.cratename is not None and self.cratetype == 'staticlib':
+            lib_name = f'lib{self.cratename}{self.extrafilename}'
+            self.outputFilename = os.path.join(self.outdir, lib_name + '.a')
+    
+    def rustCcompileLinkBinaryCallback(self, flag, arg):
+        self.compileLinkBinaryCallback(flag,arg)
+        if arg.startswith('extra-filename='):
+            self.extrafilename = arg[len('extra-filename='):]
+
     def linkingGroupCallback(self, args):
         _logger.debug('linkingGroupCallback: %s', args)
         self.linkArgs.extend(args)
-
-    def rustFileCallback(self, rustfile):
-        _logger.debug('Rust file: %s', rustfile)
-        self.rustFiles.append(rustfile)
 
     def getOutputFilename(self):
         if self.outputFilename is not None:
@@ -521,10 +567,10 @@ class ArgumentListFilter:
         (_, srcbase) = os.path.split(srcFile)
         (srcroot, _) = os.path.splitext(srcbase)
         if hidden:
-            objbase = f'.{srcroot}.o'
+            objbase = f'./target/.{srcroot}.o'
         else:
-            objbase = f'{srcroot}.o'
-        bcbase = f'.{srcroot}.o.bc'
+            objbase = f'./target/{srcroot}.o'
+        bcbase = f'./target/.{srcroot}.o.bc'
         return [objbase, bcbase]
 
     #iam: for printing our partitioning of the args

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """This is a wrapper around the real compiler.
 
 It first invokes a real compiler to generate
@@ -11,13 +10,11 @@ linked into a library or executable.
 """
 
 import sys
-
 from .compilers import wcompile
-
 def main():
-    """ The entry point to wllvm. """
-    return wcompile("wllvm") 
-
+    """ The entry point to wllvmrs. """
+    
+    return wcompile("wllvmrs") 
 
 if __name__ == '__main__':
     sys.exit(main())

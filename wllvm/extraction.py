@@ -86,7 +86,7 @@ def getSectionSizeAndOffset(sectionName, filename):
             continue
 
     # The needed section could not be found
-    _logger.warning('Could not find "%s" ELF section in "%s", so skipping this entry.', sectionName, filename)
+    # _logger.warning('Could not find "%s" ELF section in "%s", so skipping this entry.', sectionName, filename)
     return None
 
 def getSectionContent(size, offset, filename):
@@ -545,13 +545,14 @@ def handleArchiveLinux(pArgs):
                 if extractFile(inputFile, filename, i):
                     # Extract bitcode locations from object
                     contents = pArgs.extractor(filename)
-                    _logger.debug('From instance %s of %s in %s we extracted\n\t%s\n', i, filename, inputFile, contents)
+                    # _logger.debug('From instance %s of %s in %s we extracted\n\t%s\n', i, filename, inputFile, contents)
                     if contents:
+                        _logger.debug('From instance %s of %s in %s we extracted\n\t%s\n', i, filename, inputFile, contents)
                         for path in contents:
                             if path:
                                 bitCodeFiles.append(path)
-                    else:
-                        _logger.debug('From instance %s of %s in %s we extracted NOTHING\n', i, filename, inputFile)
+                    # else:
+                    #     _logger.debug('From instance %s of %s in %s we extracted NOTHING\n', i, filename, inputFile)
 
     finally:
         # Delete the temporary folder

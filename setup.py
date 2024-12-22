@@ -35,6 +35,7 @@ setup(
             'wllvm = wllvm.wllvm:main',
             'wllvm++ = wllvm.wllvmpp:main',
             'wfortran = wllvm.wfortran:main',
+            'wllvmrs = wllvm.wllvmrs:main',
             'wllvm-sanity-checker = wllvm.sanity:main',
             'extract-bc = wllvm.extractor:main',
             'wparse-args = wllvm.wparser:main',
