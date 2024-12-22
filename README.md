@@ -11,22 +11,20 @@ WLLVM for c and rust
 
 编译要求:
 
-设置 CC=wllvm 以使用 wllvm 编译 C 代码。
-
-赋予脚本执行权限：chmod +x /path/to/rustc-wrapper.sh。
-
-设置RUSTC=/path/to/rustc-wrapper.sh
-Rust 代码通过自定义的 rustc-wrapper.sh 脚本编译，以确保 Rust 代码同样生成 LLVM bitcode。
+    export CC=wllvm
+    export RUSTC=wllvm
+    export LLVM_COMPILER=clang
+    export LLVM_MIXED_COMPILER=rustc
 
 构建项目：
 
 使用 Cargo 构建项目：cargo build。
 
-构建完成后，合并后的 bitcode 文件将生成在 target/ 目录下，文件名为 merged.bc 和 merged.ll。
+或使用 make
 
 提取 Bitcode:
 
-对于 C 链接 Rust 静态库的情况，也可以直接对生成的可执行文件使用 extract-bc 工具来获取 bitcode。
+对生成的可执行文件使用 extract-bc 工具来获取 bitcode。
 
 更新状态:
 
