@@ -317,6 +317,7 @@ class ArgumentListFilter:
         self.cratename = ''
         self.outdir = ''
         self.extrafilename = ''
+        self.outputBCname = ''
         #iam: try and keep track of the files, input object, and output
         self.inputList = inputList
         self.inputFiles = []
@@ -512,14 +513,14 @@ class ArgumentListFilter:
 
     def rustEmitUnaryCallback(self, flag):
         self.linkUnaryCallback(flag)
-        self.emittype = flag.split('=')
+        self.emittype = flag.split('=')[1]
     def rustEmitBinaryCallback(self, flag,arg):
         self.linkBinaryCallback(flag,arg)
         self.emittype = arg
     
     def rustCratetypeUnaryCallback(self, flag):
         self.compileLinkUnaryCallback(flag)
-        self.cratetype = flag.split('=')
+        self.cratetype = flag.split('=')[1]
     def rustCratetypeBinaryCallback(self, flag, arg):
         self.compileLinkBinaryCallback(flag,arg)
         self.cratetype = arg
@@ -533,7 +534,9 @@ class ArgumentListFilter:
         self.outdir = arg
         if self.cratename is not None and self.cratetype == 'staticlib':
             lib_name = f'lib{self.cratename}{self.extrafilename}'
+            bc_name = f'{self.cratename}{self.extrafilename}'
             self.outputFilename = os.path.join(self.outdir, lib_name + '.a')
+            self.outputBCname = os.path.join(self.outdir,bc_name +'.bc')
     
     def rustCcompileLinkBinaryCallback(self, flag, arg):
         self.compileLinkBinaryCallback(flag,arg)

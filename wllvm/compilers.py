@@ -3,7 +3,6 @@ from __future__ import print_function
 
 
 import os
-import re
 import sys
 import tempfile
 import hashlib
@@ -338,6 +337,39 @@ def buildObject(builder):
     _logger.debug('buildObject rc = %d', rc)
     return rc
 
+def ArObjectandAttachBitcode(builder):
+    extracted_files = []
+    objCompiler = builder.getCompiler()
+    cc = builder.getLLVM_ar()  # 获取 `ar` 工具的路径
+    af = builder.getBitcodeArglistFilter()
+    outputarchive = af.getOutputFilename()
+    
+    # 构建命令，使用 grep 来过滤匹配的文件
+    cc.extend(['t', outputarchive])  # 只需要这些命令来列出文件，后面的管道和 grep 会处理
+    archiveMatchedfiles = subprocess.run(cc, capture_output=True, text=True)
+    # _logger.debug('??!')
+    if archiveMatchedfiles.returncode != 0:
+        _logger.debug("Failed to list archive files of %s: %s",outputarchive,archiveMatchedfiles.stderr)
+        return extracted_files
+    matched_files = [line for line in archiveMatchedfiles.stdout.splitlines() if af.cratename in line]
+    # 遍历匹配的文件
+    for filename in matched_files:  # 处理标准输出，按行分割
+        if af.cratename in filename:  # 假设你想通过某些标识过滤匹配的文件
+            _logger.debug("Extracting %s from %s", filename, outputarchive)
+            # 构建提取命令
+            cc = builder.getLLVM_ar()
+            cc.extend(['x', outputarchive, filename])
+            # extract_cmd = [builder.getLLVM_ar(), "x", outputarchive, filename]
+            # 执行提取命令
+            # _logger.debug('??!')
+            objects = subprocess.run(cc)
+            # _logger.debug('??!')
+            if objects.returncode == 0:  # 检查命令是否成功执行
+                extracted_files.append(filename)  # 如果成功，添加到列表
+            else:
+                _logger.info("Failed to extract %s", filename)
+
+    return extracted_files
 
 # This command does not have the executable with it
 def buildAndAttachBitcode(builder, af):
@@ -368,6 +400,14 @@ def buildAndAttachBitcode(builder, af):
         for srcFile in af.inputFiles:
             _logger.debug('Not compile only case: %s', srcFile)
             (objFile, bcFile) = af.getArtifactNames(srcFile, hidden)
+            if srcFile.endswith('.rs'):
+                extracted_files=ArObjectandAttachBitcode(builder)
+                bcFile = af.outputBCname
+                for obj in extracted_files:
+                    _logger.debug('prepare to attach %s to %s',bcFile,obj)
+                    attachBitcodePathToObject(bcFile,obj)
+                    newObjectFiles.append(obj)
+                break
             if hidden:
                 _logger.debug('building %s by %s',objFile, srcFile)
                 buildObjectFile(builder, srcFile, objFile)
