@@ -226,6 +226,9 @@ class ArgumentListFilter:
             '-C' : (1, ArgumentListFilter.rustCcompileLinkBinaryCallback),
             '--out-dir' : (1, ArgumentListFilter.rustOutdirBinaryCallback),
             '--check-cfg' : (1, ArgumentListFilter.compileBinaryCallback),
+            '--cap-lints' : (1,ArgumentListFilter.compileBinaryCallback),
+            '--cfg' : (1, ArgumentListFilter.compileBinaryCallback),
+            '--extern': (1, ArgumentListFilter.linkBinaryCallback),
             #
             # BD: need to warn the darwin user that these flags will rain on their parade
             # (the Darwin ld is a bit single minded)
@@ -532,11 +535,22 @@ class ArgumentListFilter:
     def rustOutdirBinaryCallback(self, flag, arg):
         self.compileLinkBinaryCallback(flag, arg)
         self.outdir = arg
-        if self.cratename is not None and self.cratetype == 'staticlib':
-            lib_name = f'lib{self.cratename}{self.extrafilename}'
-            bc_name = f'{self.cratename}{self.extrafilename}'
+        lib_name = f'lib{self.cratename}{self.extrafilename}'
+        bc_name = f'{self.cratename}{self.extrafilename}'
+        self.outputBCname = os.path.join(self.outdir,bc_name +'.bc')
+        if self.cratetype == 'staticlib':
             self.outputFilename = os.path.join(self.outdir, lib_name + '.a')
-            self.outputBCname = os.path.join(self.outdir,bc_name +'.bc')
+        elif self.cratetype == 'lib' or 'rlib':
+            self.outputFilename = os.path.join(self.outdir, lib_name + '.rlib')
+        elif self.cratetype == 'bin':
+            #还要加一个对extern的提取然后在linkfiles的时候加上去
+            self.outputFilename = os.path.join(self.outdir, f'{self.cratename}{self.extrafilename}')
+        # elif self.cratetype == 'dylib':
+        #     todo()
+        # elif self.cratetype == 'cdylib':
+        #     todo()
+
+
     
     def rustCcompileLinkBinaryCallback(self, flag, arg):
         self.compileLinkBinaryCallback(flag,arg)

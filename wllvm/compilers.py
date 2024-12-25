@@ -370,6 +370,7 @@ def ArObjectandAttachBitcode(builder):
                 _logger.info("Failed to extract %s", filename)
 
     return extracted_files
+# def AttachBitcodetoRustbin(builder):
 
 # This command does not have the executable with it
 def buildAndAttachBitcode(builder, af):
@@ -401,13 +402,19 @@ def buildAndAttachBitcode(builder, af):
             _logger.debug('Not compile only case: %s', srcFile)
             (objFile, bcFile) = af.getArtifactNames(srcFile, hidden)
             if srcFile.endswith('.rs'):
-                extracted_files=ArObjectandAttachBitcode(builder)
-                bcFile = af.outputBCname
-                for obj in extracted_files:
-                    _logger.debug('prepare to attach %s to %s',bcFile,obj)
-                    attachBitcodePathToObject(bcFile,obj)
-                    newObjectFiles.append(obj)
-                break
+                if af.cratetype=='staticlib' or af.cratetype =='lib':
+                    extracted_files=ArObjectandAttachBitcode(builder)
+                    bcFile = af.outputBCname
+                    for obj in extracted_files:
+                        _logger.debug('prepare to attach %s to %s',bcFile,obj)
+                        attachBitcodePathToObject(bcFile,obj)
+                        newObjectFiles.append(obj)
+                    break
+                elif af.cratetype == 'bin':
+                    bcfile = af.outputBCname
+                    objFile = af.outputFilename
+                    attachBitcodePathToObject(bcFile,objFile)
+                    sys.exit(0)
             if hidden:
                 _logger.debug('building %s by %s',objFile, srcFile)
                 buildObjectFile(builder, srcFile, objFile)
@@ -431,7 +438,7 @@ def buildAndAttachBitcode(builder, af):
 def linkFiles(builder, objectFiles):
     af = builder.getBitcodeArglistFilter()
     outputFile = af.getOutputFilename()
-    if af.cratetype == 'staticlib':
+    if af.cratetype == 'staticlib' or af.cratetype =='lib':
         cc = builder.getLLVM_ar()
         cc.extend(['-rcs', outputFile])
         cc.extend(objectFiles)
