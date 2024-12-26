@@ -402,7 +402,7 @@ def buildAndAttachBitcode(builder, af):
             _logger.debug('Not compile only case: %s', srcFile)
             (objFile, bcFile) = af.getArtifactNames(srcFile, hidden)
             if srcFile.endswith('.rs'):
-                if af.cratetype=='staticlib' or af.cratetype =='lib':
+                if af.cratetype=='staticlib' or af.cratetype =='lib' or af.cratetype == 'rlib':
                     extracted_files=ArObjectandAttachBitcode(builder)
                     bcFile = af.outputBCname
                     for obj in extracted_files:
@@ -410,26 +410,36 @@ def buildAndAttachBitcode(builder, af):
                         attachBitcodePathToObject(bcFile,obj)
                         newObjectFiles.append(obj)
                     break
-                elif af.cratetype == 'bin':
-                    bcfile = af.outputBCname
-                    objFile = af.outputFilename
-                    attachBitcodePathToObject(bcFile,objFile)
-                    sys.exit(0)
-            if hidden:
-                _logger.debug('building %s by %s',objFile, srcFile)
-                buildObjectFile(builder, srcFile, objFile)
-                newObjectFiles.append(objFile)
-
-            if srcFile.endswith('.bc'):
-                _logger.debug('attaching %s to %s', srcFile, objFile)
-                attachBitcodePathToObject(srcFile, objFile)
+                elif af.cratetype == 'bin' and srcFile.endswith('build.rs'):
+                    _logger.debug("do not act for build.rs") 
+                    continue
+                #     bcfile = af.outputBCname
+                #     objFile = af.outputFilename
+                #     attachBitcodePathToObject(bcFile,objFile)
+                #     sys.exit(0)
+                else:
+                    _logger.debug('current src:%s,name:%s,type:%s',srcFile,af.cratename,af.cratetype)
+                    _logger.debug('building and attaching %s to %s', bcFile, objFile)
+                    buildObjectFile(builder, srcFile, objFile)
+                    buildBitcodeFile(builder, srcFile, bcFile)
+                    attachBitcodePathToObject(bcFile, objFile)
+                    newObjectFiles.append(objFile)
             else:
-                _logger.debug('building and attaching %s to %s', bcFile, objFile)
-                buildBitcodeFile(builder, srcFile, bcFile)
-                attachBitcodePathToObject(bcFile, objFile)
+                if hidden:
+                    _logger.debug('building %s by %s',objFile, srcFile)
+                    buildObjectFile(builder, srcFile, objFile)
+                    newObjectFiles.append(objFile)
+
+                if srcFile.endswith('.bc'):
+                    _logger.debug('attaching %s to %s', srcFile, objFile)
+                    attachBitcodePathToObject(srcFile, objFile)
+                else:
+                    _logger.debug('building and attaching %s to %s', bcFile, objFile)
+                    buildBitcodeFile(builder, srcFile, bcFile)
+                    attachBitcodePathToObject(bcFile, objFile)
 
 
-    if not af.isCompileOnly:
+    if not af.isCompileOnly and len(newObjectFiles)!= 0:
         _logger.debug("link all files: %s",newObjectFiles)
         linkFiles(builder, newObjectFiles)
 
@@ -438,7 +448,7 @@ def buildAndAttachBitcode(builder, af):
 def linkFiles(builder, objectFiles):
     af = builder.getBitcodeArglistFilter()
     outputFile = af.getOutputFilename()
-    if af.cratetype == 'staticlib' or af.cratetype =='lib':
+    if af.cratetype == 'staticlib' or af.cratetype =='lib' or af.cratetype == 'rlib':
         cc = builder.getLLVM_ar()
         cc.extend(['-rcs', outputFile])
         cc.extend(objectFiles)

@@ -228,7 +228,7 @@ class ArgumentListFilter:
             '--check-cfg' : (1, ArgumentListFilter.compileBinaryCallback),
             '--cap-lints' : (1,ArgumentListFilter.compileBinaryCallback),
             '--cfg' : (1, ArgumentListFilter.compileBinaryCallback),
-            '--extern': (1, ArgumentListFilter.linkBinaryCallback),
+            '--extern': (1, ArgumentListFilter.compileLinkBinaryCallback),
             #
             # BD: need to warn the darwin user that these flags will rain on their parade
             # (the Darwin ld is a bit single minded)
@@ -522,10 +522,10 @@ class ArgumentListFilter:
         self.emittype = arg
     
     def rustCratetypeUnaryCallback(self, flag):
-        self.compileLinkUnaryCallback(flag)
+        # self.compileLinkUnaryCallback(flag)
         self.cratetype = flag.split('=')[1]
     def rustCratetypeBinaryCallback(self, flag, arg):
-        self.compileLinkBinaryCallback(flag,arg)
+        # self.compileLinkBinaryCallback(flag,arg)
         self.cratetype = arg
 
     def rustCratenameBinaryCallback(self, flag, arg):
@@ -533,17 +533,20 @@ class ArgumentListFilter:
         self.cratename = arg
 
     def rustOutdirBinaryCallback(self, flag, arg):
-        self.compileLinkBinaryCallback(flag, arg)
+        if self.cratetype =='bin':
+            self.linkBinaryCallback(flag, arg)
+        else:
+            self.compileLinkBinaryCallback(flag,arg)
         self.outdir = arg
         lib_name = f'lib{self.cratename}{self.extrafilename}'
         bc_name = f'{self.cratename}{self.extrafilename}'
         self.outputBCname = os.path.join(self.outdir,bc_name +'.bc')
         if self.cratetype == 'staticlib':
             self.outputFilename = os.path.join(self.outdir, lib_name + '.a')
-        elif self.cratetype == 'lib' or 'rlib':
+        elif self.cratetype == 'lib' or self.cratetype =='rlib':
             self.outputFilename = os.path.join(self.outdir, lib_name + '.rlib')
         elif self.cratetype == 'bin':
-            #还要加一个对extern的提取然后在linkfiles的时候加上去
+            #还要加一个对--extern的提取然后在linkfiles的时候加上去
             self.outputFilename = os.path.join(self.outdir, f'{self.cratename}{self.extrafilename}')
         # elif self.cratetype == 'dylib':
         #     todo()
