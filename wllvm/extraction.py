@@ -185,7 +185,7 @@ def extract_section_darwin(inputFile):
         else:
             # Remove duplicate paths
             retval = list(set(retval))
-            _logger.debug('Unique bitcode paths: %s', retval)
+            # _logger.debug('Unique bitcode paths: %s', retval)
     except Exception as e:
         _logger.error('extract_section_darwin: %s', str(e))
     return retval

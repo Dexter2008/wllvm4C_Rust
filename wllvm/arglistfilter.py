@@ -515,10 +515,10 @@ class ArgumentListFilter:
         self.linkArgs.append(arg)
 
     def rustEmitUnaryCallback(self, flag):
-        self.linkUnaryCallback(flag)
+        self.compileLinkUnaryCallback(flag)
         self.emittype = flag.split('=')[1]
     def rustEmitBinaryCallback(self, flag,arg):
-        self.linkBinaryCallback(flag,arg)
+        self.compileLinkBinaryCallback(flag,arg)
         self.emittype = arg
     
     def rustCratetypeUnaryCallback(self, flag):
