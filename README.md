@@ -20,7 +20,7 @@ cd whole-program-llvm
     export CXX=wllvmpp
     export RUSTC=wllvmrs
     export RUSTFLAGS="--emit=llvm-bc -Clinker=clang -Clink-arg=-fuse-ld=lld"
-    export WLLVM_OUTPUT_LEVEL=DEBUG
+    #export WLLVM_OUTPUT_LEVEL=DEBUG
     export LLVM_COMPILER=clang
     export LLVM_MIXED_COMPILER=rustc
 

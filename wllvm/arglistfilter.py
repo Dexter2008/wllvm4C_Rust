@@ -8,7 +8,7 @@ import sys
 _logger = logging.getLogger(__name__)
 
 # Flag for dumping
-DUMPING = True
+DUMPING = False
 
 # This class applies filters to GCC argument lists.  It has a few
 # default arguments that it records, but does not modify the argument
