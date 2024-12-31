@@ -116,6 +116,21 @@ class ClangBitcodeArgumentListFilter(ArgumentListFilter):
 def getHashedPathName(path):
     return hashlib.sha256(path.encode('utf-8')).hexdigest() if path else None
 
+def containsBitcodeSection(outFileName):
+    # Use objdump or readelf to check if the file contains a section named .llvm_bc
+    try:
+        # Check if the file contains the .llvm_bc section using objdump
+        result = subprocess.run(['objdump', '-h', outFileName], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            _logger.error('objdump failed to inspect file "%s". Error: %s', outFileName, result.stderr.decode())
+            return False
+        if '.llvm_bc' in result.stdout.decode():
+            return True
+
+    except Exception as e:
+        _logger.error('Error while checking bitcode section in "%s": %s', outFileName, str(e))
+
+    return False
 
 def attachBitcodePathToObject(bcPath, outFileName):
     # Don't try to attach a bitcode path to a binary.  Unfortunately
@@ -130,6 +145,11 @@ def attachBitcodePathToObject(bcPath, outFileName):
         _logger.warning('Cannot attach bitcode path to "%s of type %s"', outFileName, FileType.getFileTypeString(fileType))
         return
 
+    # Check if the target file already contains a .llvm_bc section
+    if containsBitcodeSection(outFileName):
+        _logger.info('Target file "%s" already contains the .llvm_bc section. Skipping attachment.', outFileName)
+        return
+    
     #iam: this also looks very dodgey; we need a more reliable way to do this:
     #if ext not in ('.o', '.lo', '.os', '.So', '.po'):
     #    _logger.warning('Cannot attach bitcode path to "%s of type %s"', outFileName, FileType.getReadableFileType(outFileName))
@@ -419,11 +439,16 @@ def buildAndAttachBitcode(builder, af):
                 #     sys.exit(0)
                 else:
                     _logger.debug('current src:%s,name:%s,type:%s',srcFile,af.cratename,af.cratetype)
-                    _logger.debug('building and attaching %s to %s', bcFile, objFile)
-                    buildObjectFile(builder, srcFile, objFile)
-                    buildBitcodeFile(builder, srcFile, bcFile)
-                    attachBitcodePathToObject(bcFile, objFile)
-                    newObjectFiles.append(objFile)
+                    assert srcFile.endswith('main.rs')
+                    _logger.debug('MAIN CASE')
+                    # objFile = af.outputFilename
+                    # bcFile = af.outputBCname
+                    # attachBitcodePathToObject(bcFile,objFile)
+                    # _logger.debug('building and attaching %s to %s', bcFile, objFile)
+                    # buildObjectFile(builder, srcFile, objFile)
+                    # buildBitcodeFile(builder, srcFile, bcFile)
+                    # attachBitcodePathToObject(bcFile, objFile)
+                    # newObjectFiles.append(objFile)
             else:
                 if hidden:
                     _logger.debug('building %s by %s',objFile, srcFile)
@@ -454,11 +479,20 @@ def linkFiles(builder, objectFiles):
         cc.extend(objectFiles)
         cc.extend(af.objectFiles)
         _logger.debug("link:%s",cc)
+    elif af.cratetype =='bin':
+        cc = builder.getCompiler()
+        cc.extend(objectFiles)
+        cc.extend(af.objectFiles)
+        cc.extend(af.linkArgs)
+        cc.extend(['-Clinker=lld'])
+        cc.extend(['-o', outputFile])
     else:
         cc = builder.getCompiler()
         cc.extend(objectFiles)
         cc.extend(af.objectFiles)
         cc.extend(af.linkArgs)
+        if '--emit=llvm-bc' in cc:
+            cc.remove('--emit=llvm-bc')
         cc.extend(['-o', outputFile])
     proc = Popen(cc)
     rc = proc.wait()
@@ -472,13 +506,14 @@ def buildBitcodeFile(builder, srcFile, bcFile):
     bcc = builder.getBitcodeCompiler()
     bcc.extend(af.compileArgs)
     if srcFile.endswith('.rs'):
-        # for i, arg in enumerate(bcc):
-        #     if arg.startswith('--emit='):
-        #         bcc[i] = '--emit=llvm-bc'
-        #         break
-        #     if '--emit=llvm-bc' not in bcc:
-        #         bcc.extend('--emit=llvm-bc')
-        bcc.extend(['--emit=llvm-bc', srcFile])
+        for i, arg in enumerate(bcc):
+            if arg.startswith('--emit='):
+                bcc[i] = '--emit=llvm-bc'
+                # break
+        if '--emit=llvm-bc' not in bcc:
+            bcc.extend('--emit=llvm-bc')
+        # bcc.extend(['--emit=llvm-bc', srcFile])
+        bcc.extend([srcFile])
     else:
         bcc.extend(['-c', srcFile])
     bcc.extend(['-o', bcFile])
@@ -495,13 +530,14 @@ def buildObjectFile(builder, srcFile, objFile):
     cc.extend(af.compileArgs)
     cc.append(srcFile)
     if srcFile.endswith('.rs'):
-            # for i, arg in enumerate(cc):
-            # if arg.startswith('--emit='):
-            #     cc[i] = '--emit=obj'
-            #     break
-            # if '--emit=obj' not in cc:
-            #     cc.extend('--emit=obj')
-        cc.extend(['--emit=obj', '-o', objFile])
+        for i, arg in enumerate(cc):
+            if arg.startswith('--emit=') and '--emit=obj':
+                cc[i] = '--emit=obj'
+                # break
+        if '--emit=obj' not in cc:
+            cc.extend('--emit=obj')
+        # cc.extend(['--emit=obj', '-o', objFile])
+        cc.extend(['-o', objFile])
     else:
         cc.extend(['-c', '-o', objFile])
     _logger.debug('buildObjectFile: %s', cc)

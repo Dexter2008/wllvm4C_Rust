@@ -185,7 +185,7 @@ def extract_section_darwin(inputFile):
         else:
             # Remove duplicate paths
             retval = list(set(retval))
-            # _logger.debug('Unique bitcode paths: %s', retval)
+            _logger.debug('Unique bitcode paths: %s', retval)
     except Exception as e:
         _logger.error('extract_section_darwin: %s', str(e))
     return retval
@@ -198,6 +198,23 @@ def extract_section_linux(inputFile):
     (sectionSize, sectionOffset) = val
     content = getSectionContent(sectionSize, sectionOffset, inputFile)
     contents = content.split('\n')
+    ft = FileType.getFileType(inputFile)
+    if ft == FileType.ELF_EXECUTABLE:
+        _logger.debug('File type determined as: %s', ft)
+        base_name = os.path.basename(inputFile)
+        base_name_underscore = base_name.replace('-', '_')
+        if os.path.exists('target/debug/deps'):
+            search_dir ='target/debug/deps'
+        elif os.path.exists('target/release/deps'):
+            search_dir ='target/release/deps'
+        if search_dir is not None:
+            for file in os.listdir(search_dir):
+                _logger.debug('Processing directory: %s', search_dir)
+                if file.startswith(base_name) or file.startswith(base_name_underscore):
+                    if file.endswith('.bc'):
+                        contents.append(os.path.join(search_dir, file))
+                        _logger.debug('Appended file: %s', os.path.join(search_dir, file))
+                        break
     if not contents:
         _logger.error('%s contained no %s. section is empty', inputFile, elfSectionName)
     else: 

@@ -41,9 +41,14 @@ make develop
 ```
 即可
 
-使用 Cargo 构建项目：cargo build。
+使用 Cargo 构建项目：
 
-或使用 make
+    cargo build
+    cargo build --release
+
+或使用 make 构建项目：
+
+    make
 
 提取 Bitcode:
 

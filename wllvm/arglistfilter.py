@@ -515,10 +515,10 @@ class ArgumentListFilter:
         self.linkArgs.append(arg)
 
     def rustEmitUnaryCallback(self, flag):
-        self.compileLinkUnaryCallback(flag)
+        self.compileUnaryCallback(flag)
         self.emittype = flag.split('=')[1]
     def rustEmitBinaryCallback(self, flag,arg):
-        self.compileLinkBinaryCallback(flag,arg)
+        self.compileBinaryCallback(flag,arg)
         self.emittype = arg
     
     def rustCratetypeUnaryCallback(self, flag):
@@ -546,7 +546,6 @@ class ArgumentListFilter:
         elif self.cratetype == 'lib' or self.cratetype =='rlib':
             self.outputFilename = os.path.join(self.outdir, lib_name + '.rlib')
         elif self.cratetype == 'bin':
-            #还要加一个对--extern的提取然后在linkfiles的时候加上去
             self.outputFilename = os.path.join(self.outdir, f'{self.cratename}{self.extrafilename}')
         # elif self.cratetype == 'dylib':
         #     todo()
@@ -556,7 +555,7 @@ class ArgumentListFilter:
 
     
     def rustCcompileLinkBinaryCallback(self, flag, arg):
-        self.compileLinkBinaryCallback(flag,arg)
+        self.compileBinaryCallback(flag,arg)
         if arg.startswith('extra-filename='):
             self.extrafilename = arg[len('extra-filename='):]
 
@@ -587,10 +586,10 @@ class ArgumentListFilter:
         (_, srcbase) = os.path.split(srcFile)
         (srcroot, _) = os.path.splitext(srcbase)
         if hidden:
-            objbase = f'./target/.{srcroot}.o'
+            objbase = f'target/.{srcroot}.o'
         else:
-            objbase = f'./target/{srcroot}.o'
-        bcbase = f'./target/.{srcroot}.o.bc'
+            objbase = f'target/{srcroot}.o'
+        bcbase = f'target/.{srcroot}.o.bc'
         return [objbase, bcbase]
 
     #iam: for printing our partitioning of the args
